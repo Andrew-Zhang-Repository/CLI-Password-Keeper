@@ -3,11 +3,13 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
+import vault_management
 import hashlib
 import os
 
 CONFIG_FILE = "config.json"
 QUESTION_FILE = "question.json"
+VAULT = "vault.json"
 
 def derive_key(password: str, salt: bytes) -> bytes:
     """Derive a Fernet key from master password + salt"""
@@ -132,6 +134,11 @@ def setup_master_password():
             elif option == "Override":
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump({}, f)
+                
+                if os.path.exists("vault.json") == True:
+                    with open(VAULT, 'w') as f:
+                        json.dump([], f)
+
                 # Remove vaulted password lists
             else:
                 print("invalid option")
@@ -166,14 +173,19 @@ def load_master_password():
         print("Incorrect master key.")
         return None
     else:
+        if os.path.exists(VAULT) == False:
+            with open(VAULT,"w") as f: 
+                json.dump([], f)
         print("Correct master key")
-        # add new password to lists function
-    
+        # add new password to lists function, functions from vault_management.py
+
+        salt = base64.b64decode(config["salt"])
+        key = derive_key(password, salt)
+        object =  Fernet(key)
 
 
-    salt = base64.b64decode(config["salt"])
-    key = derive_key(password, salt)
-    return Fernet(key)
+        #pass fernet into encrypt/decrypt in vault management
+        vault_management.cli_interface(object)
 
 
 def main():
