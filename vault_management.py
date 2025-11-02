@@ -22,14 +22,16 @@ def add_password(fernet):
     password = input("Enter password: ").strip()
 
     enc_pass = encrypt_password(fernet,password)
+    enc_desc = encrypt_password(fernet,user)
+    enc_user = encrypt_password(fernet,user)
 
     new_entry = {
-        "description": desc,
-        "username": user,
+        "description": enc_desc,
+        "username": enc_user,
         "password": enc_pass
     }
 
-    # Load existing passwords
+    
     if os.path.exists(VAULT):
         with open(VAULT, "r") as f:
             data = json.load(f)
@@ -44,6 +46,23 @@ def add_password(fernet):
     print("Password saved securely.")
 
 
+def show_pass_list(fernet):
+
+    with open(VAULT,"r") as f:
+        data = json.load(f)
+
+    for i in data:
+
+        print("DESCRIPTION: ")
+        print(decrypt_password(fernet, i["description"])+"\n")
+
+        print("USERNAME: ")
+        print(decrypt_password(fernet, i["username"]) + "\n")
+
+        print("PASSWORD: ")
+        print(decrypt_password(fernet, i["password"])+ "\n")
+
+    print("All has been displayed")
 
 
 
@@ -58,7 +77,7 @@ def cli_interface(fernet):
 
     while True:
         if answer == "1":
-            # Show pass word list
+            show_pass_list(fernet)
             break
         elif answer == "2":
             add_password(fernet)
