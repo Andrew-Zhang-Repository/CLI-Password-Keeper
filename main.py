@@ -31,6 +31,7 @@ def recovery_mode():
     with open(CONFIG_FILE, "r") as f:
         config = json.load(f)
         salt = base64.b64decode(config["salt"])
+        recovery_salt = base64.b64decode(config["recovery_salt"])
     
     with open(QUESTION_FILE, "r") as f:
         stored_qas = json.load(f)
@@ -38,6 +39,7 @@ def recovery_mode():
     print("Answer a series of your own verification questions")
 
     total_correct = 0
+    correct_answers = []
     for key,ans in stored_qas.items():
 
         print(key)
@@ -46,40 +48,74 @@ def recovery_mode():
         decrypted_answer = hashlib.sha256(answer.encode()).hexdigest()
             
         if decrypted_answer == ans:
+            correct_answers.append(answer)
             total_correct +=1
 
-    if total_correct >=2:
-        print("Your allowed change master password now while keeping your password vault")
-        set_master_key()
+    if total_correct ==3:
+        print("\nYou're allowed change master password now while keeping your password vault\n")
+
+        recovery_key = derive_key("".join(correct_answers), recovery_salt)
+        recovery_fernet = Fernet(recovery_key)
+        encrypted_master = config["encrypted_master_password"]
+        old_master_key = recovery_fernet.decrypt(encrypted_master.encode()).decode()
+    
+        old_pass = Fernet(derive_key(old_master_key, salt))
+        #rencrypt here
+        set_master_key(old_pass)
+       
 
     else:
         print("Verification failure")
 
 
 
-def set_master_key():
 
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump({}, f)
+
+
+def set_master_key(old):
+
+    
+
+
+    
 
     password = input("Create master password: ")
     salt = os.urandom(16)
     key = derive_key(password, salt)
     master_hash = hashlib.sha256(password.encode()).hexdigest()
+    encrypted_key = Fernet(key)
 
+    # potential rencrypt
 
-    with open(CONFIG_FILE, "w") as f:
+    if old != None:
+        old_passes = []
+        with open(VAULT,"r") as fv:
+            data = json.load(fv)
         
-        json.dump({
-            "salt": base64.b64encode(salt).decode(),
-            "master_hash": master_hash
-        }, f)
+        if not data == False or data == None:
+            for i in data:
+                og_desc = vault_management.decrypt_password(old,i["description"])
+                og_user = vault_management.decrypt_password(old,i["username"])
+                og_password = vault_management.decrypt_password(old,i["password"])
 
-    print("Master password created successfully.")
-    print("Now you will set a 3 questions yourself that only you would know. In case you forget your master key")
+                print("OG IS :"+og_password)
+                new_desc = vault_management.encrypt_password(encrypted_key,og_desc)
+                new_user = vault_management.encrypt_password(encrypted_key,og_user)
+                new_pass = vault_management.encrypt_password(encrypted_key,og_password)
+
+                old_passes.append({"description":new_desc,"username":new_user,"password":new_pass})
+        print(old_passes)
+        if os.path.exists(VAULT):
+            with open(VAULT,"w") as fm:
+                json.dump(old_passes,fm)
+
+
+
+    print("\nMaster password created successfully.")
+    print("\nNow you will set a 3 questions yourself that only you would know. In case you forget your master key\n")
 
     question_and_answer = {}
-
+    answers = []
     for i in range(0,3):
 
         verified = False
@@ -91,13 +127,27 @@ def set_master_key():
 
             if question not in question_and_answer:
                 question_and_answer[question] = hashlib.sha256(answer.encode()).hexdigest()
+                answers.append(answer)
                 verified = True
             else:
                 print("You have already inputted that question, try again")
 
+    recovery_salt = os.urandom(16)
+    recovery_key = derive_key("".join(answers), recovery_salt)
+    recovery_fernet = Fernet(recovery_key)
+    encrypted_master_password = recovery_fernet.encrypt(password.encode()).decode()
 
-    # Put question a json file/encrypted file dk whats optimal here
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump({}, f)
 
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({
+            "salt": base64.b64encode(salt).decode(),
+            "recovery_salt": base64.b64encode(recovery_salt).decode(),
+            "master_hash": master_hash,
+            "encrypted_master_password": encrypted_master_password
+        }, f)
+  
     
     with open(QUESTION_FILE, "w") as f:
         json.dump(question_and_answer, f, indent=4)
@@ -120,33 +170,37 @@ def setup_master_password():
         config = json.load(f)
 
         if "salt" in config and "master_hash" in config:
-            print("master key has already been created")
-            print("activate forgot password or override?")
-            print("override will delete all kept passwords from last master key")
+            print("Master key has already been created\n")
+            print("Activate forgot password or override?\n")
+            print("Override will delete all kept passwords from last master key\n")
 
             option = input("Forgot? or Override?:\n")
 
             if option == "Forgot":
                 
-                
                 recovery_mode()
                 return None
+            
             elif option == "Override":
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump({}, f)
                 
-                if os.path.exists("vault.json") == True:
+                if os.path.exists(VAULT) == True:
                     with open(VAULT, 'w') as f:
                         json.dump([], f)
 
-                # Remove vaulted password lists
+                if os.path.exists(QUESTION_FILE) == True:
+                    with open(QUESTION_FILE,"w") as f:  
+                        json.dump({},f)
+
+               
             else:
                 print("invalid option")
 
         else:
 
             
-            return Fernet(set_master_key())
+            return Fernet(set_master_key(None))
 
 def load_master_password():
     
@@ -176,15 +230,15 @@ def load_master_password():
         if os.path.exists(VAULT) == False:
             with open(VAULT,"w") as f: 
                 json.dump([], f)
-        print("Correct master key")
-        # add new password to lists function, functions from vault_management.py
+        print("You have entered the correct master key\n")
+      
 
         salt = base64.b64decode(config["salt"])
         key = derive_key(password, salt)
         object =  Fernet(key)
 
 
-        #pass fernet into encrypt/decrypt in vault management
+        
         vault_management.cli_interface(object)
 
 

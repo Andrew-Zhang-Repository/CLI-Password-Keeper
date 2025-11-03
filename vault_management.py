@@ -7,7 +7,7 @@ import hashlib
 import os
 
 VAULT = "vault.json"
-# Assuming fernet is already created from master password
+
 def encrypt_password(fernet, password: str) -> str:
     return fernet.encrypt(password.encode()).decode()
 
@@ -15,14 +15,14 @@ def decrypt_password(fernet, token: str) -> str:
     return fernet.decrypt(token.encode()).decode()
 
 def add_password(fernet):
-    print("Please type in this format : Description->Username->Password")
+    print("\nPlease type in this format : Description->Username->Password\n")
 
     desc = input("Enter description: ")
     user = input("Enter username: ")
     password = input("Enter password: ").strip()
 
     enc_pass = encrypt_password(fernet,password)
-    enc_desc = encrypt_password(fernet,user)
+    enc_desc = encrypt_password(fernet,desc)
     enc_user = encrypt_password(fernet,user)
 
     new_entry = {
@@ -43,7 +43,7 @@ def add_password(fernet):
     with open(VAULT, "w") as f:
         json.dump(data, f)
 
-    print("Password saved securely.")
+    print("\nPassword saved securely.")
 
 
 def show_pass_list(fernet):
@@ -62,18 +62,19 @@ def show_pass_list(fernet):
         print("PASSWORD: ")
         print(decrypt_password(fernet, i["password"])+ "\n")
 
+        print("\n\n")
+
+
     print("All has been displayed")
-
-
 
 
 def cli_interface(fernet):
     
 
-    print("You are now in.\n Type 1 to show current passwords and their desc\n" \
+    print("You are now in.\n\nType 1 to show current passwords and their desc\n" \
     "Type 2 to add a password along with a description")
 
-    answer = input("What do you wish to do ? ")
+    answer = input("\nWhat do you wish to do?\n")
 
     while True:
         if answer == "1":
@@ -84,5 +85,6 @@ def cli_interface(fernet):
             break
         else:
             print("Invalid entry ")
+            break
     
 
